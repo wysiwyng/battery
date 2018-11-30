@@ -412,7 +412,7 @@ void app_main(void)
 			gpio_set_level(GPIO_NUM_2, 0);
 			esp_wifi_scan_get_ap_num(&num_aps);
 
-			if (current_item > num_aps) current_item = num_aps - 1;
+			if (current_item >= num_aps) current_item = num_aps - 1;
 
             if (ap) {
                 free(ap);
