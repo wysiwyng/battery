@@ -1,0 +1,75 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Project",
+            "type": "shell",
+            "command": "make -j$(nproc)",
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": "absolute"
+            },
+            "options": {
+                "env": {
+                    "IDF_PATH": "/home/wysiwyng/work/esp32/esp-idf"
+                }
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Clean Project",
+            "type": "shell",
+            "command": "make clean",
+            "options": {
+                "env": {
+                    "IDF_PATH": "/home/wysiwyng/work/esp32/esp-idf"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Flash Project",
+            "type": "shell",
+            "command": "make flash",
+            "options": {
+                "env": {
+                    "IDF_PATH": "/home/wysiwyng/work/esp32/esp-idf"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean App",
+            "type": "shell",
+            "command": "make app-clean",
+            "options": {
+                "env": {
+                    "IDF_PATH": "/home/wysiwyng/work/esp32/esp-idf"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Flash App",
+            "type": "shell",
+            "command": "make app-flash",
+            "options": {
+                "env": {
+                    "IDF_PATH": "/home/wysiwyng/work/esp32/esp-idf"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Configure Project",
+            "type": "shell",
+            "command": "xfce4-terminal -e \"bash -c 'source ../sourceme;make menuconfig'\"",
+            "problemMatcher": []
+        }
+    ]
+}

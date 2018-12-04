@@ -126,7 +126,7 @@ static void ui_draw_title()
     // Header
     UG_FillFrame(0, 0, 319, 15, C_MIDNIGHT_BLUE);
     UG_FontSelect(&FONT_8X8);
-    const short titleLeft = (320 / 2) - (strlen(TITLE) * 9 / 2);
+
     UG_SetForecolor(C_WHITE);
     UG_SetBackcolor(C_MIDNIGHT_BLUE);
     UG_PutString(4, 4, TITLE);
@@ -219,8 +219,6 @@ void draw_page(uint32_t num_items, uint32_t current_item) {
 	const int innerHeight = 240 - (16 * 2); // 208
 	const int itemHeight = innerHeight / ITEMS_PER_PAGE; // 52
 
-	const int rightWidth = (213); // 320 * (2.0 / 3.0)
-
 	const short textLeft = 4;
 
 	int page = current_item / ITEMS_PER_PAGE;
@@ -290,7 +288,7 @@ void app_main(void)
     size_t ver_size = strlen(VER_PREFIX) + strlen(COMPILEDATE) + 1 + strlen(GITREV) + 1;
     VERSION = malloc(ver_size);
     if (!VERSION) abort();
-
+    
     strcpy(VERSION, VER_PREFIX);
     strcat(VERSION, COMPILEDATE);
     strcat(VERSION, "-");

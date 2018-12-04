@@ -5,3 +5,4 @@ firmware.fw
 .settings/
 .project
 .cproject
+.vscode/browse.*
