@@ -253,7 +253,7 @@ static void backlight_init()
   ledc_timer_config_t ledc_timer;
 	memset(&ledc_timer, 0, sizeof(ledc_timer));
 
-  ledc_timer.bit_num = LEDC_TIMER_13_BIT; //set timer counter bit number
+  ledc_timer.duty_resolution = LEDC_TIMER_13_BIT; //set timer counter bit number
   ledc_timer.freq_hz = 5000;              //set frequency of pwm
   ledc_timer.speed_mode = LEDC_LOW_SPEED_MODE;   //timer mode,
   ledc_timer.timer_num = LEDC_TIMER_0;    //timer index
@@ -304,7 +304,7 @@ void backlight_deinit()
 
 void ili9341_write_frame(uint16_t* buffer)
 {
-    short x, y;
+    short y;
 
     if (buffer == NULL)
     {
@@ -336,7 +336,7 @@ void ili9341_write_frame(uint16_t* buffer)
 
 void ili9341_write_frame_rectangle(short left, short top, short width, short height, uint16_t* buffer)
 {
-    short x, y;
+    short y;
 
     if (left < 0 || top < 0) abort();
     if (width < 1 || height < 1) abort();
@@ -387,7 +387,7 @@ void ili9341_clear(uint16_t color)
 
 void ili9341_write_frame_rectangleLE(short left, short top, short width, short height, uint16_t* buffer)
 {
-    short x, y;
+    short y;
 
     if (left < 0 || top < 0) abort();
     if (width < 1 || height < 1) abort();

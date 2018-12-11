@@ -88,7 +88,7 @@ static void UpdateDisplay()
     ui_update_display();
 }
 
-static void DisplayMessage(const char* message)
+static void DisplayMessage(char* message)
 {
     UG_FontSelect(&FONT_8X12);
     short left = (320 / 2) - (strlen(message) * 9 / 2);
@@ -119,8 +119,6 @@ void boot_application()
 
 static void ui_draw_title()
 {
-    const char* TITLE = "ODROID-GO";
-
     UG_FillFrame(0, 0, 319, 239, C_WHITE);
 
     // Header
@@ -129,7 +127,7 @@ static void ui_draw_title()
 
     UG_SetForecolor(C_WHITE);
     UG_SetBackcolor(C_MIDNIGHT_BLUE);
-    UG_PutString(4, 4, TITLE);
+    UG_PutString(4, 4, "ODROID-GO");
 
     // Footer
     UG_FillFrame(0, 239 - 16, 319, 239, C_MIDNIGHT_BLUE);
