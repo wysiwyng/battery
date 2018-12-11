@@ -148,7 +148,7 @@ esp_err_t event_handler(void *ctx, system_event_t *event){
 	return ESP_OK;
 }
 
-#define ITEMS_PER_PAGE 4
+#define ITEMS_APS 4
 
 wifi_ap_record_t *ap;
 
@@ -215,20 +215,35 @@ void searchVendor(uint8_t* mac) {
     vendorstring[idx] = 0;
 }
 
-void draw_page(uint32_t num_items, uint32_t current_item) {
+void print_ap_info(int page, int line, int textLeft, int top) {
+    wifi_ap_record_t *cur_ap = ap + page + line;
+    char country[3] = {cur_ap->country.cc[0], cur_ap->country.cc[1], 0};
+    if (country[0] < 'A' || country[0] > 'Z') {
+        country[0] = '-';
+        country[1] = '-';
+    }
+
+    memset(vendorstring, 0, 64);
+    searchVendor(cur_ap->bssid);
+
+    sprintf(tempstring, "SSID: %s\nCH: %2d, RSSI: %3ddb, %s, %s\nPairC: %s, GroupC: %s\n%02X:%02X:%02X:%02X:%02X:%02X, Vendor: %s", cur_ap->ssid, cur_ap->primary, cur_ap->rssi, country, wifi_auth_types[cur_ap->authmode], wifi_cipher_types[cur_ap->pairwise_cipher], wifi_cipher_types[cur_ap->group_cipher], cur_ap->bssid[0], cur_ap->bssid[1], cur_ap->bssid[2], cur_ap->bssid[3], cur_ap->bssid[4], cur_ap->bssid[5], vendorstring);	        
+    UG_PutString(textLeft, top + 6, tempstring);
+}
+
+void draw_page(uint32_t num_items, uint32_t current_item, uint8_t items_per_page, void (*text_fct)(int, int, int, int)) {
 	const int innerHeight = 240 - (16 * 2); // 208
-	const int itemHeight = innerHeight / ITEMS_PER_PAGE; // 52
+	const int itemHeight = innerHeight / items_per_page; // 52
 
 	const short textLeft = 4;
 
-	int page = current_item / ITEMS_PER_PAGE;
+	int page = current_item / items_per_page;
 	page *= ITEM_COUNT;
 
 	UG_FillFrame(0, 15, 319, 222, C_WHITE);
     UG_FontSelect(&FONT_6X8);
 
 	if (num_items > 0) {
-		for (int line = 0; line < ITEMS_PER_PAGE; ++line) {
+		for (int line = 0; line < items_per_page; ++line) {
 			if (page + line >= num_items) break;
 
             short top = 16 + (line * itemHeight) - 1;
@@ -246,18 +261,7 @@ void draw_page(uint32_t num_items, uint32_t current_item) {
                 UG_FillFrame(0, top + 2, 319, top + itemHeight - 1 - 1, C_WHITE);
 	        }
 
-	        wifi_ap_record_t *cur_ap = ap + page + line;
-	        char country[3] = {cur_ap->country.cc[0], cur_ap->country.cc[1], 0};
-	        if (country[0] < 'A' || country[0] > 'Z') {
-	        	country[0] = '-';
-	        	country[1] = '-';
-	        }
-
-	        memset(vendorstring, 0, 64);
-	        searchVendor(cur_ap->bssid);
-
-	        sprintf(tempstring, "SSID: %s\nCH: %2d, RSSI: %3ddb, %s, %s\nPairC: %s, GroupC: %s\n%02X:%02X:%02X:%02X:%02X:%02X, Vendor: %s", cur_ap->ssid, cur_ap->primary, cur_ap->rssi, country, wifi_auth_types[cur_ap->authmode], wifi_cipher_types[cur_ap->pairwise_cipher], wifi_cipher_types[cur_ap->group_cipher], cur_ap->bssid[0], cur_ap->bssid[1], cur_ap->bssid[2], cur_ap->bssid[3], cur_ap->bssid[4], cur_ap->bssid[5], vendorstring);	        
-	        UG_PutString(textLeft, top + 6, tempstring);
+            (*text_fct)(page, line, textLeft, top);
 		}
 
         sprintf(tempstring, "       %d/%d", current_item + 1, num_items);
@@ -395,13 +399,13 @@ void app_main(void)
 		if (!previousState.values[ODROID_INPUT_UP] && state.values[ODROID_INPUT_UP]) {
 			if (current_item > 0) current_item--;
 			else current_item = num_aps - 1;
-			draw_page(num_aps, current_item);
+			draw_page(num_aps, current_item, ITEMS_APS, &print_ap_info);
 		}
 
 		if (!previousState.values[ODROID_INPUT_DOWN] && state.values[ODROID_INPUT_DOWN]) {
 			if (current_item < num_aps - 1) current_item++;
 			else current_item = 0;
-			draw_page(num_aps, current_item);
+			draw_page(num_aps, current_item, ITEMS_APS, &print_ap_info);
 		}
 
 
@@ -425,7 +429,7 @@ void app_main(void)
             	printf("%s, %d, %02X:%02X:%02X:%02X:%02X:%02X\n", ap[i].ssid, ap[i].rssi, ap[i].bssid[0], ap[i].bssid[1], ap[i].bssid[2], ap[i].bssid[3], ap[i].bssid[4], ap[i].bssid[5]);
             }
             
-			draw_page(num_aps, current_item);
+			draw_page(num_aps, current_item, ITEMS_APS, &print_ap_info);
             UG_FontSelect(&FONT_8X8);
             UG_SetForecolor(C_WHITE);
             UG_SetBackcolor(C_MIDNIGHT_BLUE);
