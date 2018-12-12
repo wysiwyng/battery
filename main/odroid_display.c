@@ -42,9 +42,9 @@ static TaskHandle_t xTaskToNotify = NULL;
 //static bool useCallbacks = false;
 
 
-#define LINE_COUNT (6)
+//#define LINE_COUNT (6)
 //uint16_t* line[2]; //[320 * LINE_COUNT]; // Must be at least 320
-static uint16_t line[2][320 * LINE_COUNT]; // Must be at least 320
+//static uint16_t line[2][320 * LINE_COUNT]; // Must be at least 320
 
 const int DUTY_MAX = 0x1fff;
 
@@ -302,38 +302,31 @@ void backlight_deinit()
     }
 }
 
-void ili9341_write_frame(uint16_t* buffer)
+void ili9341_write_frame(uint16_t* buffer[])
 {
     short y;
 
     if (buffer == NULL)
     {
-        // clear the buffer
-        memset(line[0], 0x00, 320 * sizeof(uint16_t));
-
-        // clear the screen
-        send_reset_drawing(0, 0, 320, 240);
-
-        for (y = 0; y < 240; ++y)
-        {
-            send_continue_line(line[0], 320, 1);
-        }
+        ili9341_clear(0xffff);
     }
     else
     {
         const int displayWidth = 320;
-        const int displayHeight = 240;
+        const int displayHeight = 60;
 
 
-        send_reset_drawing(0, 0, displayWidth, displayHeight);
-
-        for (y = 0; y < displayHeight; y += 4)
-        {
-            send_continue_line(buffer + y * displayWidth, displayWidth, 4);
+        send_reset_drawing(0, 0, displayWidth, 240);
+        for (int i = 0; i < 4; ++i) {
+            for (y = 0; y < displayHeight; y += 4)
+            {
+                send_continue_line(buffer[i] + y * displayWidth, displayWidth, 4);
+            }
         }
     }
 }
 
+/*
 void ili9341_write_frame_rectangle(short left, short top, short width, short height, uint16_t* buffer)
 {
     short y;
@@ -367,24 +360,24 @@ void ili9341_write_frame_rectangle(short left, short top, short width, short hei
         }
     }
 }
-
+*/
 void ili9341_clear(uint16_t color)
 {
     send_reset_drawing(0, 0, 320, 240);
-
+    uint16_t *line = malloc(320 * sizeof(uint16_t));
     // clear the buffer
     for (int i = 0; i < 320; ++i)
     {
-        line[0][i] = color;
+        line[i] = color;
     }
 
     // clear the screen
     for (int y = 0; y < 240; ++y)
     {
-        send_continue_line(line[0], 320, 1);
+        send_continue_line(line, 320, 1);
     }
 }
-
+/*
 void ili9341_write_frame_rectangleLE(short left, short top, short width, short height, uint16_t* buffer)
 {
     short y;
@@ -414,7 +407,7 @@ void ili9341_write_frame_rectangleLE(short left, short top, short width, short h
             for (int i = 0; i < width; ++i)
             {
                 uint16_t pixel = buffer[y * width + i];
-                line[alt][i] = pixel << 8 | pixel >> 8;
+                line[alt][i] = pixel;//pixel << 8 | pixel >> 8;
             }
 
             send_continue_line(line[alt], width, 1);
@@ -424,7 +417,7 @@ void ili9341_write_frame_rectangleLE(short left, short top, short width, short h
         }
     }
 }
-
+*/
 void ili9341_init()
 {
 	// Initialize transactions

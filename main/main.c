@@ -77,10 +77,13 @@ static void pset(UG_S16 x, UG_S16 y, UG_COLOR color)
 
 static void ui_update_display()
 {
+    ili9341_write_frame(fb);
+    /*
     ili9341_write_frame_rectangleLE(0, 0, 320, 60, fb[0]);
     ili9341_write_frame_rectangleLE(0, 60, 320, 60, fb[1]);
     ili9341_write_frame_rectangleLE(0, 120, 320, 60, fb[2]);
     ili9341_write_frame_rectangleLE(0, 180, 320, 60, fb[3]);
+    */
 }
 
 static void UpdateDisplay()
