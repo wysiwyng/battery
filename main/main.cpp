@@ -30,7 +30,7 @@ typedef struct {
     uint8_t   ch;
     uint8_t * mac;
     uint32_t* pkts;
-    uint32_t* time;
+    uint64_t* time;
     signed int* rssi;
 } station_t;
 
@@ -153,8 +153,23 @@ void print_sta_info(int page, int line, int textLeft, int top) {
     memset(vendorstring, 0, 64);
     searchVendor(cur_sta.mac);
 
-    sprintf(tempstring, "%02X:%02X:%02X:%02X:%02X:%02X, %s, %3ddb, ch: %u\nMgmt: %u, Ctrl: %u, Data: %u", cur_sta.mac[0], cur_sta.mac[1], cur_sta.mac[2], cur_sta.mac[3], cur_sta.mac[4], cur_sta.mac[5], vendorstring, *cur_sta.rssi, cur_sta.ch, cur_sta.pkts[0], cur_sta.pkts[1], cur_sta.pkts[2]);
-    UG_PutString(textLeft, top + 4, tempstring);
+    int64_t diff_time = esp_timer_get_time() - *cur_sta.time;
+
+    UG_COLOR color;
+
+    if (diff_time > 10000000) {
+        color = (C_BLACK);
+    } else if (diff_time > 5000000) {
+        color = (C_RED);
+    } else if (diff_time > 1000000) {
+        color = (C_ORANGE);
+    } else {
+        color = (C_GREEN);
+    }
+
+    sprintf(tempstring, "%02X:%02X:%02X:%02X:%02X:%02X, %s, %3ddb, ch: %u\nData: %u, Mgmt: %u, Ctrl: %u", cur_sta.mac[0], cur_sta.mac[1], cur_sta.mac[2], cur_sta.mac[3], cur_sta.mac[4], cur_sta.mac[5], vendorstring, *cur_sta.rssi, cur_sta.ch, cur_sta.pkts[2], cur_sta.pkts[0], cur_sta.pkts[1]);
+    UG_PutString(textLeft, top + 5, tempstring);
+    UG_FillCircle(310, top + 13, 5, color);
 }
 
 void print_ap_info(int page, int line, int textLeft, int top) {
@@ -169,7 +184,7 @@ void print_ap_info(int page, int line, int textLeft, int top) {
     searchVendor(cur_ap->bssid);
 
     sprintf(tempstring, "SSID: %s\nCH: %2d, RSSI: %3ddb, %s, %s\nPairC: %s, GroupC: %s\n%02X:%02X:%02X:%02X:%02X:%02X, Vendor: %s", cur_ap->ssid, cur_ap->primary, cur_ap->rssi, country, wifi_auth_types[cur_ap->authmode], wifi_cipher_types[cur_ap->pairwise_cipher], wifi_cipher_types[cur_ap->group_cipher], cur_ap->bssid[0], cur_ap->bssid[1], cur_ap->bssid[2], cur_ap->bssid[3], cur_ap->bssid[4], cur_ap->bssid[5], vendorstring);	        
-    UG_PutString(textLeft, top + 10, tempstring);
+    UG_PutString(textLeft, top + 9, tempstring);
 }
 
 void draw_page(uint32_t num_items, uint32_t current_item, uint8_t items_per_page, void (*text_fct)(int, int, int, int)) {
@@ -208,9 +223,10 @@ void draw_page(uint32_t num_items, uint32_t current_item, uint8_t items_per_page
 
             (*text_fct)(page, line, textLeft, top);
 		}
-        sprintf(tempstring, "       %2d/%2d", current_item + 1, num_items);
+        sprintf(tempstring, "%2d/%2d", current_item + 1, num_items);
         UG_SetForecolor(C_WHITE);
         UG_SetBackcolor(C_MIDNIGHT_BLUE);
+        UG_FontSelect(&FONT_8X8);
         UG_PutString(320 - strlen(tempstring) * 8 - 10, 240 - 4 - 8, tempstring);
 
 		ui_update_display();
@@ -282,8 +298,11 @@ static void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t 
         new_station.mac = (uint8_t*)malloc(6);
         new_station.pkts = (uint32_t*)calloc(3, sizeof(uint32_t));
         new_station.rssi = (signed int*)malloc(sizeof(signed int));
-        
+        new_station.time = (uint64_t*)malloc(sizeof(uint64_t));
+
         *new_station.rssi = 0;
+        
+        *new_station.time = esp_timer_get_time();
 
         memcpy(new_station.mac, mac_from, 6);
         new_station.pkts[type] = 1;
@@ -292,6 +311,7 @@ static void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t 
     } else {
         (stations.get(idx).pkts[type]) += 1;
         *(stations.get(idx).rssi) = pkt->rx_ctrl.rssi;
+        *(stations.get(idx).time) = esp_timer_get_time();
     }
 
     xSemaphoreGive(wifi_semaphore);
@@ -430,6 +450,8 @@ void app_main(void)
                 stations.clear();
                 xSemaphoreGive(wifi_semaphore);
 
+                current_item = 0;
+
                 UG_FontSelect(&FONT_8X8);
                 UG_SetForecolor(C_WHITE);
                 UG_SetBackcolor(C_MIDNIGHT_BLUE);
@@ -468,14 +490,14 @@ void app_main(void)
         }
 
 		if (!previousState.values[ODROID_INPUT_UP] && state.values[ODROID_INPUT_UP]) {
-			if (current_item > 0) current_item--;
-			else current_item = max_items - 1;
+            current_item--;
+            if (current_item < 0) current_item = max_items - 1;
 			draw_page(max_items, current_item, items_per_page, draw_fct);
 		}
 
 		if (!previousState.values[ODROID_INPUT_DOWN] && state.values[ODROID_INPUT_DOWN]) {
-			if (current_item < max_items - 1) current_item++;
-			else current_item = 0;
+            current_item++;
+            if (current_item > max_items - 1) current_item = 0;
 			draw_page(max_items, current_item, items_per_page, draw_fct);
 		}
 
@@ -529,14 +551,17 @@ void app_main(void)
             }
 
             odroid_input_battery_level_read(&bat);
-
-            sprintf(tempstring, "%d mV", bat.millivolts);
+            uint32_t free_heap = esp_get_free_heap_size();
 
             UG_FontSelect(&FONT_8X8);
             UG_SetForecolor(C_WHITE);
             UG_SetBackcolor(C_MIDNIGHT_BLUE);
 
+            sprintf(tempstring, "%d mV", bat.millivolts);
             UG_PutString(240, 4, tempstring);
+
+            sprintf(tempstring, "heap: %6u", free_heap);
+            UG_PutString(100, 4, tempstring);
 
             ui_update_display();
         }
