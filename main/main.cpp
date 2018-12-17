@@ -122,6 +122,7 @@ esp_err_t event_handler(void *ctx, system_event_t *event){
 }
 
 #define ITEMS_APS 4
+#define ITEMS_STAS 8
 
 wifi_ap_record_t *ap;
 SimpleList<station_t> stations;
@@ -152,8 +153,8 @@ void print_sta_info(int page, int line, int textLeft, int top) {
     memset(vendorstring, 0, 64);
     searchVendor(cur_sta.mac);
 
-    sprintf(tempstring, "%02X:%02X:%02X:%02X:%02X:%02X, Vendor: %s, %3ddb\nMgmt: %u, Ctrl: %u, Data: %u", cur_sta.mac[0], cur_sta.mac[1], cur_sta.mac[2], cur_sta.mac[3], cur_sta.mac[4], cur_sta.mac[5], vendorstring, *cur_sta.rssi, cur_sta.pkts[0], cur_sta.pkts[1], cur_sta.pkts[2]);
-    UG_PutString(textLeft, top + 6, tempstring);
+    sprintf(tempstring, "%02X:%02X:%02X:%02X:%02X:%02X, %s, %3ddb, ch: %u\nMgmt: %u, Ctrl: %u, Data: %u", cur_sta.mac[0], cur_sta.mac[1], cur_sta.mac[2], cur_sta.mac[3], cur_sta.mac[4], cur_sta.mac[5], vendorstring, *cur_sta.rssi, cur_sta.ch, cur_sta.pkts[0], cur_sta.pkts[1], cur_sta.pkts[2]);
+    UG_PutString(textLeft, top + 4, tempstring);
 }
 
 void print_ap_info(int page, int line, int textLeft, int top) {
@@ -168,7 +169,7 @@ void print_ap_info(int page, int line, int textLeft, int top) {
     searchVendor(cur_ap->bssid);
 
     sprintf(tempstring, "SSID: %s\nCH: %2d, RSSI: %3ddb, %s, %s\nPairC: %s, GroupC: %s\n%02X:%02X:%02X:%02X:%02X:%02X, Vendor: %s", cur_ap->ssid, cur_ap->primary, cur_ap->rssi, country, wifi_auth_types[cur_ap->authmode], wifi_cipher_types[cur_ap->pairwise_cipher], wifi_cipher_types[cur_ap->group_cipher], cur_ap->bssid[0], cur_ap->bssid[1], cur_ap->bssid[2], cur_ap->bssid[3], cur_ap->bssid[4], cur_ap->bssid[5], vendorstring);	        
-    UG_PutString(textLeft, top + 6, tempstring);
+    UG_PutString(textLeft, top + 10, tempstring);
 }
 
 void draw_page(uint32_t num_items, uint32_t current_item, uint8_t items_per_page, void (*text_fct)(int, int, int, int)) {
@@ -189,22 +190,24 @@ void draw_page(uint32_t num_items, uint32_t current_item, uint8_t items_per_page
 
             short top = 16 + (line * itemHeight) - 1;
 
+            UG_FillFrame(2, top - 1, 317, top, C_GRAY);
+            UG_FillFrame(2, top + itemHeight - 1, 317, top + itemHeight, C_GRAY);
+
 	        if ((page) + line == current_item)
 	        {
                 UG_SetForecolor(C_BLACK);
                 UG_SetBackcolor(C_YELLOW);
-                UG_FillFrame(0, top + 2, 319, top + itemHeight - 1 - 1, C_YELLOW);
+                UG_FillFrame(0, top + 2, 319, top + itemHeight - 3, C_YELLOW);
 	        }
 	        else
 	        {
                 UG_SetForecolor(C_BLACK);
                 UG_SetBackcolor(C_WHITE);
-                UG_FillFrame(0, top + 2, 319, top + itemHeight - 1 - 1, C_WHITE);
+                UG_FillFrame(0, top + 2, 319, top + itemHeight - 3, C_WHITE);
 	        }
 
             (*text_fct)(page, line, textLeft, top);
 		}
-
         sprintf(tempstring, "       %2d/%2d", current_item + 1, num_items);
         UG_SetForecolor(C_WHITE);
         UG_SetBackcolor(C_MIDNIGHT_BLUE);
@@ -219,7 +222,7 @@ void start_scan(wifi_scan_config_t *scan_conf) {
     UG_SetForecolor(C_WHITE);
     UG_SetBackcolor(C_MIDNIGHT_BLUE);
 
-    UG_PutString(4, 240 - 4 - 8, "scanning wifi");
+    UG_PutString(4, 240 - 4 - 8, "scanning wifi              ");
 
     ui_update_display();
     scan_finished = 1;
@@ -292,6 +295,23 @@ static void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t 
     }
 
     xSemaphoreGive(wifi_semaphore);
+}
+
+void change_channel(int dir) {
+    bool sniffing;
+    esp_wifi_get_promiscuous(&sniffing);
+    if (sniffing) {
+        uint8_t channel;
+        wifi_second_chan_t second;
+        esp_wifi_get_channel(&channel, &second);
+
+        channel += dir;
+
+        if (channel > 14) channel = 1;
+        if (channel < 1) channel = 14;
+
+        esp_wifi_set_channel(channel, second);
+    }
 }
 
 extern "C" {
@@ -383,11 +403,11 @@ void app_main(void)
         if(!sniffing) {
             max_items = num_aps;
             draw_fct = &print_ap_info;
-            items_per_page = 4;
+            items_per_page = ITEMS_APS;
         } else {
             max_items = stations.size();
             draw_fct = &print_sta_info;
-            items_per_page = 6;
+            items_per_page = ITEMS_STAS;
         }
 
 		if (!previousState.values[ODROID_INPUT_MENU] && state.values[ODROID_INPUT_MENU]) {
@@ -437,6 +457,14 @@ void app_main(void)
             uint8_t channel = ap[current_item].primary;
             esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
             esp_wifi_set_promiscuous(true);
+        }
+
+        if (!previousState.values[ODROID_INPUT_RIGHT] && state.values[ODROID_INPUT_RIGHT]) {
+            change_channel(1);
+        }
+
+        if (!previousState.values[ODROID_INPUT_LEFT] && state.values[ODROID_INPUT_LEFT]) {
+            change_channel(-1);
         }
 
 		if (!previousState.values[ODROID_INPUT_UP] && state.values[ODROID_INPUT_UP]) {
@@ -489,7 +517,7 @@ void app_main(void)
             esp_wifi_get_promiscuous(&sniffing);
 
             if (sniffing) {
-                draw_page(stations.size(), current_item, 6, print_sta_info);
+                draw_page(stations.size(), current_item, ITEMS_STAS, print_sta_info);
                 UG_FontSelect(&FONT_8X8);
                 UG_SetForecolor(C_WHITE);
                 UG_SetBackcolor(C_MIDNIGHT_BLUE);
