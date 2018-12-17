@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define ODROID_GAMEPAD_IO_X ADC1_CHANNEL_6
 #define ODROID_GAMEPAD_IO_Y ADC1_CHANNEL_7
@@ -49,3 +52,7 @@ void odroid_input_battery_level_init();
 void odroid_input_battery_level_read(odroid_battery_state* out_state);
 void odroid_input_battery_level_force_voltage(float volts);
 void odroid_input_battery_monitor_enabled_set(int value);
+
+#ifdef __cplusplus
+}
+#endif

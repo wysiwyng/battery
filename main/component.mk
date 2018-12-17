@@ -10,3 +10,4 @@ COMPILEDATE:=\"$(shell date "+%Y%m%d")\"
 GITREV:=\"$(shell git rev-parse HEAD | cut -b 1-10)\"
 
 CFLAGS += -DCOMPILEDATE="$(COMPILEDATE)" -DGITREV="$(GITREV)"
+CPPFLAGS += -DCOMPILEDATE="$(COMPILEDATE)" -DGITREV="$(GITREV)"

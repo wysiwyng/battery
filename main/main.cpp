@@ -12,61 +12,33 @@
 #include "rom/crc.h"
 
 #include <string.h>
+#include <map>
+#include <vector>
 
 //#include "odroid_sdcard.h"
 #include "odroid_display.h"
 #include "odroid_input.h"
+#include "SimpleList.h"
 
 #include "../components/ugui/ugui.h"
-#include "oui.h"
-
-
-const char* SD_CARD = "/sd";
-//const char* HEADER = "ODROIDGO_FIRMWARE_V00_00";
-const char* HEADER_V00_01 = "ODROIDGO_FIRMWARE_V00_01";
-
-#define FIRMWARE_DESCRIPTION_SIZE (40)
-char FirmwareDescription[FIRMWARE_DESCRIPTION_SIZE];
-
-// <partition type=0x00 subtype=0x00 label='name' flags=0x00000000 length=0x00000000>
-// 	<data length=0x00000000>
-// 		[...]
-// 	</data>
-// </partition>
-typedef struct
-{
-    uint8_t type;
-    uint8_t subtype;
-    uint8_t _reserved0;
-    uint8_t _reserved1;
-
-    uint8_t label[16];
-
-    uint32_t flags;
-    uint32_t length;
-} odroid_partition_t;
-
-// ------
+#include "vendor.h"
 
 static uint16_t *fb[4];
+
+typedef struct {
+    uint8_t   ap;
+    uint8_t   ch;
+    uint8_t * mac;
+    uint32_t* pkts;
+    uint32_t* time;
+    signed int* rssi;
+} station_t;
 
 UG_GUI gui;
 char tempstring[512];
 char vendorstring[64];
 
-#define ITEM_COUNT (4)
-char** files;
-int fileCount;
-const char* path = "/sd/odroid/firmware";
-char* VERSION = NULL;
-
 uint64_t last_time = 0;
-
-#define TILE_WIDTH (86)
-#define TILE_HEIGHT (48)
-#define TILE_LENGTH (TILE_WIDTH * TILE_HEIGHT * 2)
-//uint8_t TileData[TILE_LENGTH];
-
 
 static void pset(UG_S16 x, UG_S16 y, UG_COLOR color)
 {
@@ -152,6 +124,7 @@ esp_err_t event_handler(void *ctx, system_event_t *event){
 #define ITEMS_APS 4
 
 wifi_ap_record_t *ap;
+SimpleList<station_t> stations;
 
 const char *wifi_auth_types[] = {
 		"Open",
@@ -173,47 +146,14 @@ const char *wifi_cipher_types[] = {
 		"Unknown"
 };
 
-int binSearchVendors(uint8_t* searchBytes, int lowerEnd, int upperEnd) {
-    uint8_t listBytes[3];
-    int     res;
-    int     mid = (lowerEnd + upperEnd) / 2;
+void print_sta_info(int page, int line, int textLeft, int top) {
+    station_t cur_sta = stations.get(page + line);
 
-    while (lowerEnd <= upperEnd) {
-        listBytes[0] = (*(const unsigned char *)(data_macs + mid * 5));
-        listBytes[1] = (*(const unsigned char *)(data_macs + mid * 5 + 1));
-        listBytes[2] = (*(const unsigned char *)(data_macs + mid * 5 + 2));
+    memset(vendorstring, 0, 64);
+    searchVendor(cur_sta.mac);
 
-        res = memcmp(searchBytes, listBytes, 3);
-
-        if (res == 0) {
-            return mid;
-        } else if (res < 0) {
-            upperEnd = mid - 1;
-            mid      = (lowerEnd + upperEnd) / 2;
-        } else if (res > 0) {
-            lowerEnd = mid + 1;
-            mid      = (lowerEnd + upperEnd) / 2;
-        }
-    }
-
-    return -1;
-}
-
-void searchVendor(uint8_t* mac) {
-    int    pos        = binSearchVendors(mac, 0, sizeof(data_macs) / 5 - 1);
-    int    realPos    = (*(const unsigned char *)(data_macs + pos * 5 + 3)) | (*(const unsigned char *)(data_macs + pos * 5 + 4)) << 8;
-    int idx = 0;
-    if (pos >= 0) {
-        char tmp;
-
-        for (int i = 0; i < 8; i++) {
-            tmp = (char)(*(const unsigned char *)(data_vendors + realPos * 8 + i));
-
-            if (tmp != 0) vendorstring[idx++] += tmp;
-            tmp += ' ';
-        }
-    }
-    vendorstring[idx] = 0;
+    sprintf(tempstring, "%02X:%02X:%02X:%02X:%02X:%02X, Vendor: %s, %3ddb\nMgmt: %u, Ctrl: %u, Data: %u", cur_sta.mac[0], cur_sta.mac[1], cur_sta.mac[2], cur_sta.mac[3], cur_sta.mac[4], cur_sta.mac[5], vendorstring, *cur_sta.rssi, cur_sta.pkts[0], cur_sta.pkts[1], cur_sta.pkts[2]);
+    UG_PutString(textLeft, top + 6, tempstring);
 }
 
 void print_ap_info(int page, int line, int textLeft, int top) {
@@ -238,7 +178,7 @@ void draw_page(uint32_t num_items, uint32_t current_item, uint8_t items_per_page
 	const short textLeft = 4;
 
 	int page = current_item / items_per_page;
-	page *= ITEM_COUNT;
+	page *= items_per_page;
 
 	UG_FillFrame(0, 15, 319, 222, C_WHITE);
     UG_FontSelect(&FONT_6X8);
@@ -265,7 +205,7 @@ void draw_page(uint32_t num_items, uint32_t current_item, uint8_t items_per_page
             (*text_fct)(page, line, textLeft, top);
 		}
 
-        sprintf(tempstring, "       %d/%d", current_item + 1, num_items);
+        sprintf(tempstring, "       %2d/%2d", current_item + 1, num_items);
         UG_SetForecolor(C_WHITE);
         UG_SetBackcolor(C_MIDNIGHT_BLUE);
         UG_PutString(320 - strlen(tempstring) * 8 - 10, 240 - 4 - 8, tempstring);
@@ -287,23 +227,82 @@ void start_scan(wifi_scan_config_t *scan_conf) {
     ESP_ERROR_CHECK(esp_wifi_scan_start(scan_conf, false));
 }
 
+typedef struct {
+	unsigned frame_ctrl:16;
+	unsigned duration_id:16;
+	uint8_t addr1[6]; /* receiver address */
+	uint8_t addr2[6]; /* sender address */
+	uint8_t addr3[6]; /* filtering address */
+	unsigned sequence_ctrl:16;
+	uint8_t addr4[6]; /* optional */
+} wifi_ieee80211_mac_hdr_t;
+
+typedef struct {
+	wifi_ieee80211_mac_hdr_t hdr;
+	uint8_t payload[0]; /* network data ended with 4 bytes csum (CRC32) */
+} wifi_ieee80211_packet_t;
+
+SemaphoreHandle_t wifi_semaphore;
+
+static void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type) {
+    wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t*)buff;
+    wifi_ieee80211_packet_t *ieeepkt = (wifi_ieee80211_packet_t*)pkt->payload;
+    wifi_ieee80211_mac_hdr_t *ieeehdr = &ieeepkt->hdr;
+
+    if (type == WIFI_PKT_MISC) return;
+
+    xSemaphoreTake(wifi_semaphore, 1000 / portTICK_RATE_MS);
+
+    uint8_t *mac_to;
+    uint8_t *mac_from;
+
+    mac_to = ieeehdr->addr1;
+    mac_from = ieeehdr->addr2;
+
+    //printf("%02X:%02X:%02X:%02X:%02X:%02X\t\t%02X:%02X:%02X:%02X:%02X:%02X\n", mac_from[0], mac_from[1], mac_from[2], mac_from[3], mac_from[4], mac_from[5], mac_to[0], mac_to[1], mac_to[2], mac_to[3], mac_to[4], mac_to[5]);
+
+    int c = stations.size();
+
+    int idx = -1;
+
+    for (int i = 0; i < c; ++i) {
+        if(memcmp(stations.get(i).mac, mac_from, 6) == 0) {
+            idx = i;
+            break;
+        }
+    }
+
+    if (idx == -1) {
+        station_t new_station;
+        new_station.ap = 0;
+        new_station.ch = pkt->rx_ctrl.channel;
+        new_station.mac = (uint8_t*)malloc(6);
+        new_station.pkts = (uint32_t*)calloc(3, sizeof(uint32_t));
+        new_station.rssi = (signed int*)malloc(sizeof(signed int));
+        
+        *new_station.rssi = 0;
+
+        memcpy(new_station.mac, mac_from, 6);
+        new_station.pkts[type] = 1;
+
+        stations.add(new_station);
+    } else {
+        (stations.get(idx).pkts[type]) += 1;
+        *(stations.get(idx).rssi) = pkt->rx_ctrl.rssi;
+    }
+
+    xSemaphoreGive(wifi_semaphore);
+}
+
+extern "C" {
+   void app_main();
+}
+
 void app_main(void)
 {
-    const char* VER_PREFIX = "Ver: ";
-    size_t ver_size = strlen(VER_PREFIX) + strlen(COMPILEDATE) + 1 + strlen(GITREV) + 1;
-    VERSION = malloc(ver_size);
-    if (!VERSION) abort();
-    
-    strcpy(VERSION, VER_PREFIX);
-    strcat(VERSION, COMPILEDATE);
-    strcat(VERSION, "-");
-    strcat(VERSION, GITREV);
-
-    printf("odroid-go-firmware (%s). HEAP=%d\n", VERSION, esp_get_free_heap_size());
-
     nvs_flash_init();
     tcpip_adapter_init();
-
+    
     ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -320,7 +319,7 @@ void app_main(void)
     printf("free heap: %d\n", esp_get_free_heap_size());
 
     for(int i = 0; i < 4; ++i) {
-    	fb[i] = malloc(320 * 240 *2 / 4);
+    	fb[i] = (uint16_t*)malloc(320 * 240 *2 / 4);
     	if(!fb[i]) {
     		printf("failed to allocate fb%d!\n", i);
     		abort();
@@ -363,10 +362,33 @@ void app_main(void)
 
     start_scan(&scan_conf);
 
+    wifi_promiscuous_filter_t filter = {
+        .filter_mask = WIFI_PROMIS_FILTER_MASK_ALL
+    };
+
+    esp_wifi_set_promiscuous_rx_cb(wifi_sniffer_packet_handler);
+    esp_wifi_set_promiscuous_filter(&filter);
+    bool sniffing = false;
+    int items_per_page = 4;
+    void (*draw_fct)(int, int, int, int);
+    uint16_t max_items = 0;
+    wifi_semaphore = xSemaphoreCreateMutex();
+
     while(1)
     {
 		odroid_gamepad_state state;
 		odroid_input_gamepad_read(&state);
+        esp_wifi_get_promiscuous(&sniffing);
+
+        if(!sniffing) {
+            max_items = num_aps;
+            draw_fct = &print_ap_info;
+            items_per_page = 4;
+        } else {
+            max_items = stations.size();
+            draw_fct = &print_sta_info;
+            items_per_page = 6;
+        }
 
 		if (!previousState.values[ODROID_INPUT_MENU] && state.values[ODROID_INPUT_MENU]) {
 			ui_draw_title();
@@ -375,38 +397,58 @@ void app_main(void)
 
 			boot_application();
 		}
+        
+        if (!previousState.values[ODROID_INPUT_B] && state.values[ODROID_INPUT_B]) {
+            if (sniffing) {
+                xSemaphoreTake(wifi_semaphore, 1000 / portTICK_RATE_MS);
+                int c = stations.size();
+                for (int i = 0; i < c; ++i) {
+                    free(stations.get(i).mac);
+                    free(stations.get(i).pkts);
+                    free(stations.get(i).rssi);
+                }
+                stations.clear();
+                xSemaphoreGive(wifi_semaphore);
 
-		if (!previousState.values[ODROID_INPUT_A] && state.values[ODROID_INPUT_A] && !scan_finished) {
+                UG_FontSelect(&FONT_8X8);
+                UG_SetForecolor(C_WHITE);
+                UG_SetBackcolor(C_MIDNIGHT_BLUE);
+                UG_PutString(4, 240 - 4 - 8, "cleared list            ");
+                last_time = esp_timer_get_time();
+                ui_update_display();
+                //draw_page(max_items, current_item, items_per_page, draw_fct);
+            }
+        }
+
+		if (!previousState.values[ODROID_INPUT_START] && state.values[ODROID_INPUT_START] && !scan_finished) {
+            esp_wifi_set_promiscuous(false);
+            int c = stations.size();
+            for (int i = 0; i < c; ++i) {
+                free(stations.get(i).mac);
+                free(stations.get(i).pkts);
+                free(stations.get(i).rssi);
+            }
+            stations.clear();
             ui_update_display();
             start_scan(&scan_conf);
 		}
 
-		if (!previousState.values[ODROID_INPUT_START] && state.values[ODROID_INPUT_START]) {
-            UG_FontSelect(&FONT_8X8);
-            UG_SetForecolor(C_WHITE);
-            UG_SetBackcolor(C_MIDNIGHT_BLUE);
-
-            if (scanning) {
-                scanning = 0;
-                UG_PutString(4, 240 - 4 - 8, "idle                  ");
-            } else {
-                scanning = 1;
-                UG_PutString(4, 240 - 4 - 8, "scanning              ");
-                start_scan(&scan_conf);
-            }
-            ui_update_display();
-		}
+        if (!previousState.values[ODROID_INPUT_A] && state.values[ODROID_INPUT_A]) {
+            uint8_t channel = ap[current_item].primary;
+            esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+            esp_wifi_set_promiscuous(true);
+        }
 
 		if (!previousState.values[ODROID_INPUT_UP] && state.values[ODROID_INPUT_UP]) {
 			if (current_item > 0) current_item--;
-			else current_item = num_aps - 1;
-			draw_page(num_aps, current_item, ITEMS_APS, &print_ap_info);
+			else current_item = max_items - 1;
+			draw_page(max_items, current_item, items_per_page, draw_fct);
 		}
 
 		if (!previousState.values[ODROID_INPUT_DOWN] && state.values[ODROID_INPUT_DOWN]) {
-			if (current_item < num_aps - 1) current_item++;
+			if (current_item < max_items - 1) current_item++;
 			else current_item = 0;
-			draw_page(num_aps, current_item, ITEMS_APS, &print_ap_info);
+			draw_page(max_items, current_item, items_per_page, draw_fct);
 		}
 
 
@@ -421,7 +463,7 @@ void app_main(void)
                 free(ap);
                 ap = NULL;
             }
-            ap = malloc(num_aps * sizeof(wifi_ap_record_t));
+            ap = (wifi_ap_record_t*)malloc(num_aps * sizeof(wifi_ap_record_t));
             memset(ap, 0, num_aps * sizeof(wifi_ap_record_t));
             uint16_t num = num_aps;
             esp_wifi_scan_get_ap_records(&num, ap);
@@ -440,9 +482,24 @@ void app_main(void)
             if(scanning) start_scan(&scan_conf);
 		}
 
-        if (last_time < esp_timer_get_time() - 1000000)
+        if (last_time < esp_timer_get_time() - 500000)
         {
         	last_time = esp_timer_get_time();
+
+            esp_wifi_get_promiscuous(&sniffing);
+
+            if (sniffing) {
+                draw_page(stations.size(), current_item, 6, print_sta_info);
+                UG_FontSelect(&FONT_8X8);
+                UG_SetForecolor(C_WHITE);
+                UG_SetBackcolor(C_MIDNIGHT_BLUE);
+                uint8_t channel;
+                wifi_second_chan_t second;
+                esp_wifi_get_channel(&channel, &second);
+                sprintf(tempstring, "sniffing on ch %u       ", channel);
+                UG_PutString(4, 240 - 4 - 8, tempstring);
+            }
+
             odroid_input_battery_level_read(&bat);
 
             sprintf(tempstring, "%d mV", bat.millivolts);

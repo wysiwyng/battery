@@ -3,6 +3,10 @@
 
 #include "stdint.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* -------------------------------------------------------------------------------- */
 /* -- CONFIG SECTION                                                             -- */
 /* -------------------------------------------------------------------------------- */
@@ -61,5 +65,8 @@ typedef signed long int       UG_S32;
 #define USE_PRERENDER_EVENT
 #define USE_POSTRENDER_EVENT
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -19,6 +19,9 @@
 
 #include "ugui_config.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* -------------------------------------------------------------------------------- */
 /* -- µGUI FONTS                                                                 -- */
@@ -1052,5 +1055,8 @@ UG_RESULT UG_ImageHide( UG_WINDOW* wnd, UG_U8 id );
 UG_RESULT UG_ImageSetBMP( UG_WINDOW* wnd, UG_U8 id, const UG_BMP* bmp );
 
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif
