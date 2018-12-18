@@ -334,6 +334,19 @@ void change_channel(int dir) {
     }
 }
 
+void clear_stations() {
+    xSemaphoreTake(wifi_semaphore, 1000 / portTICK_RATE_MS);
+    int c = stations.size();
+    for (int i = 0; i < c; ++i) {
+        free(stations.get(i).mac);
+        free(stations.get(i).pkts);
+        free(stations.get(i).rssi);
+        free(stations.get(i).time);
+    }
+    stations.clear();
+    xSemaphoreGive(wifi_semaphore);
+}
+
 extern "C" {
    void app_main();
 }
@@ -440,15 +453,8 @@ void app_main(void)
         
         if (!previousState.values[ODROID_INPUT_B] && state.values[ODROID_INPUT_B]) {
             if (sniffing) {
-                xSemaphoreTake(wifi_semaphore, 1000 / portTICK_RATE_MS);
-                int c = stations.size();
-                for (int i = 0; i < c; ++i) {
-                    free(stations.get(i).mac);
-                    free(stations.get(i).pkts);
-                    free(stations.get(i).rssi);
-                }
-                stations.clear();
-                xSemaphoreGive(wifi_semaphore);
+                
+                clear_stations();              
 
                 current_item = 0;
 
@@ -463,14 +469,8 @@ void app_main(void)
         }
 
 		if (!previousState.values[ODROID_INPUT_START] && state.values[ODROID_INPUT_START] && !scan_finished) {
-            esp_wifi_set_promiscuous(false);
-            int c = stations.size();
-            for (int i = 0; i < c; ++i) {
-                free(stations.get(i).mac);
-                free(stations.get(i).pkts);
-                free(stations.get(i).rssi);
-            }
-            stations.clear();
+            esp_wifi_set_promiscuous(false);            
+            clear_stations();
             ui_update_display();
             start_scan(&scan_conf);
 		}
