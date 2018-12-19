@@ -223,11 +223,11 @@ void draw_page(uint32_t num_items, uint32_t current_item, uint8_t items_per_page
 
             (*text_fct)(page, line, textLeft, top);
 		}
-        sprintf(tempstring, "%2d/%2d", current_item + 1, num_items);
+        sprintf(tempstring, "             %d/%d", current_item + 1, num_items);
         UG_SetForecolor(C_WHITE);
         UG_SetBackcolor(C_MIDNIGHT_BLUE);
         UG_FontSelect(&FONT_8X8);
-        UG_PutString(320 - strlen(tempstring) * 8 - 10, 240 - 4 - 8, tempstring);
+        UG_PutString(320 - strlen(tempstring) * 9 - 10, 240 - 4 - 8, tempstring);
 
 		ui_update_display();
 	}
@@ -476,7 +476,7 @@ void app_main(void)
 		}
 
         if (!previousState.values[ODROID_INPUT_A] && state.values[ODROID_INPUT_A]) {
-            uint8_t channel = ap[current_item].primary;
+            uint8_t channel = num_aps ? ap[current_item].primary : 1;
             esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
             esp_wifi_set_promiscuous(true);
         }
