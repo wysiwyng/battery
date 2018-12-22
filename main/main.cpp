@@ -223,7 +223,7 @@ void draw_page(uint32_t num_items, uint32_t current_item, uint8_t items_per_page
 
             (*text_fct)(page, line, textLeft, top);
 		}
-        sprintf(tempstring, "             %d/%d", current_item + 1, num_items);
+        sprintf(tempstring, "        %d/%d", current_item + 1, num_items);
         UG_SetForecolor(C_WHITE);
         UG_SetBackcolor(C_MIDNIGHT_BLUE);
         UG_FontSelect(&FONT_8X8);
