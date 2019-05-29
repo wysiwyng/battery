@@ -63,7 +63,7 @@ static void UpdateDisplay()
     ui_update_display();
 }
 
-static void DisplayMessage(char* message)
+static void DisplayMessage(char const * message)
 {
     UG_FontSelect(&FONT_8X12);
     short left = (320 / 2) - (strlen(message) * 9 / 2);
@@ -223,7 +223,7 @@ void draw_page(uint32_t num_items, uint32_t current_item, uint8_t items_per_page
 
             (*text_fct)(page, line, textLeft, top);
 		}
-        sprintf(tempstring, "             %d/%d", current_item + 1, num_items);
+        sprintf(tempstring, "        %d/%d", current_item + 1, num_items);
         UG_SetForecolor(C_WHITE);
         UG_SetBackcolor(C_MIDNIGHT_BLUE);
         UG_FontSelect(&FONT_8X8);
@@ -272,10 +272,10 @@ static void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t 
 
     xSemaphoreTake(wifi_semaphore, 1000 / portTICK_RATE_MS);
 
-    uint8_t *mac_to;
+    //uint8_t *mac_to;
     uint8_t *mac_from;
 
-    mac_to = ieeehdr->addr1;
+    //mac_to = ieeehdr->addr1;
     mac_from = ieeehdr->addr2;
 
     //printf("%02X:%02X:%02X:%02X:%02X:%02X\t\t%02X:%02X:%02X:%02X:%02X:%02X\n", mac_from[0], mac_from[1], mac_from[2], mac_from[3], mac_from[4], mac_from[5], mac_to[0], mac_to[1], mac_to[2], mac_to[3], mac_to[4], mac_to[5]);
@@ -363,12 +363,10 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    wifi_scan_config_t scan_conf = {
-    		.ssid = NULL,
-			.bssid = NULL,
-			.channel = NULL,
-			.show_hidden = true,
-    };
+    wifi_scan_config_t scan_conf;
+
+	scan_conf.show_hidden = true;
+
     printf("free heap: %d\n", esp_get_free_heap_size());
 
     for(int i = 0; i < 4; ++i) {
