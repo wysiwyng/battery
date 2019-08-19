@@ -300,7 +300,7 @@ static void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t 
         new_station.rssi = (signed int*)malloc(sizeof(signed int));
         new_station.time = (uint64_t*)malloc(sizeof(uint64_t));
 
-        *new_station.rssi = 0;
+        *new_station.rssi = pkt->rx_ctrl.rssi;
         
         *new_station.time = esp_timer_get_time();
 
